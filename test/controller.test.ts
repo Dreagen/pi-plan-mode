@@ -28,6 +28,10 @@ describe("parseCommandArgs", () => {
         assert.equal(parseCommandArgs("   "), "enter");
         assert.equal(parseCommandArgs("exit"), "exit");
         assert.equal(parseCommandArgs("  EXIT "), "exit");
+        assert.equal(parseCommandArgs("help"), "help");
+        assert.equal(parseCommandArgs(" HELP "), "help");
+        assert.equal(parseCommandArgs("--help"), "help");
+        assert.equal(parseCommandArgs("-h"), "help");
         assert.equal(parseCommandArgs("off"), "invalid");
         assert.equal(parseCommandArgs("exit now"), "invalid");
         assert.equal(parseCommandArgs("toggle"), "invalid");
@@ -55,6 +59,13 @@ describe("entering and exiting", () => {
         const widget = host.widgets.get(WIDGET_KEY)?.join("\n") ?? "";
         assert.ok(widget.includes(`writes limited to plan, ${join("..", "shared")}, ${join("/abs", "specs")}`), widget);
         assert.ok(!widget.includes(cwd));
+    });
+
+    it("colours only the directory list in the widget", async () => {
+        const { host, run } = setup({ allowedWriteDirectories: ["plan/"] });
+        host.theme = { fg: (color, text) => `<${color}>${text}</${color}>` };
+        await run("");
+        assert.match(host.widgets.get(WIDGET_KEY)?.[0] ?? "", /^PLAN MODE: writes limited to <mdHeading>plan<\/mdHeading>$/);
     });
 
     it("removes status and widget on exit and notifies", async () => {
@@ -86,6 +97,27 @@ describe("entering and exiting", () => {
         await run("exit");
         assert.equal(controller.isEnabled(), false);
         assert.equal(host.entries.length, 0);
+    });
+
+    it("help explains the commands and configuration without changing state or waiting for idle", async () => {
+        const { host, run, controller } = setup();
+        host.holdIdle = true;
+        await run("help");
+        assert.equal(host.idleCalls, 0);
+        assert.equal(controller.isEnabled(), false);
+        assert.equal(host.entries.length, 0);
+        const text = host.notifications[0].message;
+        assert.equal(host.notifications[0].level, "info");
+        for (const expected of ["/planmode help", "allowedWriteDirectories", "allowedTools", "allowedShellCommands", ".pi/plan-mode.json", "plan-mode.json", "currently off"]) {
+            assert.ok(text.includes(expected), expected);
+        }
+    });
+
+    it("help reports the active configuration while plan mode is on", async () => {
+        const { host, run } = setup({ allowedWriteDirectories: ["plan/"] });
+        await run("");
+        await run("--help");
+        assert.match(host.notifications.at(-1)?.message ?? "", /Current: plan mode is on \(local configuration.*Writable directories: .*plan/);
     });
 
     it("shows usage for unrecognised arguments without changing state", async () => {

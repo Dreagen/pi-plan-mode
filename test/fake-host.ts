@@ -22,8 +22,8 @@ export class FakeHost {
     idleWaiters: Array<() => void> = [];
     holdIdle = false;
     idleCalls = 0;
+    theme: { fg(color: string, text: string): string } | undefined;
     footer: unknown;
-    editor: unknown;
 
     readonly api: HostApi = {
         on: ((event: string, handler: Handler) => {
@@ -51,12 +51,9 @@ export class FakeHost {
                 if (text === undefined) this.statuses.delete(key);
                 else this.statuses.set(key, text);
             },
+            theme: this.theme,
             setFooter: (factory: unknown) => {
                 this.footer = factory;
-            },
-            getEditorComponent: () => this.editor,
-            setEditorComponent: (factory: unknown) => {
-                this.editor = factory;
             },
             setWidget: (key: string, content: string[] | undefined) => {
                 this.uiCalls.push({ kind: "widget", key, value: content });

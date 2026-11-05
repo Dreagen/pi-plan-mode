@@ -7,6 +7,8 @@
 export interface HostUi {
     notify(message: string, type?: "info" | "warning" | "error"): void;
     setStatus(key: string, text: string | undefined): void;
+    /** pi's active theme, when running inside pi. */
+    theme?: { fg(color: string, text: string): string };
     setWidget(key: string, content: string[] | undefined, options?: { placement?: "aboveEditor" | "belowEditor" }): void;
 }
 

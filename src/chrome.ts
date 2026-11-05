@@ -1,18 +1,15 @@
 /**
  * Plan-mode "chrome": the parts of pi's UI that change while plan mode is on.
  *
- *  - the editor's top and bottom borders turn orange
  *  - the footer shows `plan • <model> • <thinking>`, with `plan` in orange
  *
  * pi's themes have no orange role (`warning` is yellow), so the colour is an explicit ANSI value.
  * pi doesn't let an extension decorate the built-in footer, so while plan mode is on a replacement
  * footer is installed that mirrors the built-in one; it is removed again when the mode is left.
  */
-import { CustomEditor } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { homedir } from "node:os";
 
-const MARKER = Symbol.for("pi-plan-mode.editor");
 const RESET_FG = "\x1b[39m";
 
 export function orange(text: string): string {
@@ -119,31 +116,8 @@ function sanitize(text: string): string {
 
 export function createChrome(pi: { getThinkingLevel?: () => string }): Chrome {
     let installed = false;
-    let previousEditor: unknown;
 
     function install(ctx: ChromeContext): void {
-        // Another extension may own the editor; remember it so it can be restored.
-        if (!installed) {
-            const current = ctx.ui.getEditorComponent?.();
-            previousEditor = current && !(current as any)[MARKER] ? current : undefined;
-        }
-
-        class PlanEditor extends CustomEditor {
-            render(width: number): string[] {
-                // pi assigns `borderColor` from the thinking level at arbitrary moments, so override it per render.
-                const original = this.borderColor;
-                this.borderColor = orange;
-                try {
-                    return super.render(width);
-                } finally {
-                    this.borderColor = original;
-                }
-            }
-        }
-        const factory = (tui: any, theme: any, keybindings: any) => new PlanEditor(tui, theme, keybindings);
-        (factory as any)[MARKER] = true;
-        ctx.ui.setEditorComponent?.(factory);
-
         ctx.ui.setFooter?.((_tui: any, theme: any, footerData: any) => {
             let cacheKey = "";
             let totals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
@@ -198,9 +172,7 @@ export function createChrome(pi: { getThinkingLevel?: () => string }): Chrome {
 
     function uninstall(ctx: ChromeContext): void {
         if (!installed) return;
-        ctx.ui.setEditorComponent?.(previousEditor);
         ctx.ui.setFooter?.(undefined);
-        previousEditor = undefined;
         installed = false;
     }
 

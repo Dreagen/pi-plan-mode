@@ -33,9 +33,9 @@ describe("extension wiring", () => {
         for (const [enter, exit] of [["pm", "pm"], ["planmode", "planmode"], ["pm", "planmode"], ["planmode", "pm"]] as const) {
             const { host, cwd } = load();
             await host.run(enter, "", cwd);
-            assert.ok(host.footer && host.editor);
+            assert.ok(host.footer);
             await host.run(exit, "exit", cwd);
-            assert.equal(host.statuses.size + (host.footer ? 1 : 0) + (host.editor ? 1 : 0), 0);
+            assert.equal(host.statuses.size + (host.footer ? 1 : 0), 0);
         }
     });
 
@@ -61,7 +61,7 @@ describe("extension wiring", () => {
             planMode(next.api);
             next.branch = branch;
             await next.emit("session_start", { reason }, next.ctx(cwd));
-            assert.ok(next.footer && next.editor, reason);
+            assert.ok(next.footer, reason);
         }
     });
 
@@ -78,10 +78,9 @@ describe("extension wiring", () => {
         const ctx = host.ctx(cwd);
         host.branch = [{ type: "custom", customType: STATE_ENTRY_TYPE, data: { enabled: true } }];
         await host.emit("session_tree", { newLeafId: "a", oldLeafId: "b" }, ctx);
-        assert.ok(host.footer && host.editor);
+        assert.ok(host.footer);
         host.branch = [];
         await host.emit("session_tree", { newLeafId: "c", oldLeafId: "a" }, ctx);
         assert.equal(host.footer, undefined);
-        assert.equal(host.editor, undefined);
     });
 });

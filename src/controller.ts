@@ -1,5 +1,6 @@
 import type { Chrome } from "./chrome.ts";
 import { type ConfigResult, emptyConfig, loadConfig } from "./config.ts";
+import { buildHelp } from "./help.ts";
 import { buildGuidance } from "./guidance.ts";
 import type { BeforeAgentStartLike, HostApi, HostCommandContext, HostContext, ToolCallLike } from "./host.ts";
 import { restoreEnabledFromBranch, STATE_ENTRY_TYPE } from "./state.ts";
@@ -9,14 +10,15 @@ import { describeAllowedDirectories, evaluateToolCall } from "./tool-policy.ts";
 export const STATUS_KEY = "plan-mode";
 export const WIDGET_KEY = "plan-mode";
 
-export const USAGE = "Usage: /planmode (or /pm) to enter plan mode, /planmode exit (or /pm exit) to leave it.";
+export const USAGE = "Usage: /planmode (or /pm) to enter plan mode, /planmode exit (or /pm exit) to leave it, /planmode help for configuration help.";
 
-export type ParsedCommand = "enter" | "exit" | "invalid";
+export type ParsedCommand = "enter" | "exit" | "help" | "invalid";
 
 export function parseCommandArgs(args: string): ParsedCommand {
     const trimmed = args.trim().toLowerCase();
     if (trimmed === "") return "enter";
     if (trimmed === "exit") return "exit";
+    if (["help", "--help", "-h", "?"].includes(trimmed)) return "help";
     return "invalid";
 }
 
@@ -47,6 +49,18 @@ export class PlanModeController {
         const command = parseCommandArgs(args);
         if (command === "invalid") {
             ctx.ui.notify(USAGE, "warning");
+            return;
+        }
+        if (command === "help") {
+            // Read-only: needs no idle boundary and changes nothing.
+            ctx.ui.notify(
+                buildHelp({
+                    enabled: this.enabled,
+                    configResult: this.configResult,
+                    describeDirectories: () => describeAllowedDirectories(this.configResult),
+                }),
+                "info",
+            );
             return;
         }
         await ctx.waitForIdle();
@@ -118,10 +132,10 @@ export class PlanModeController {
         // With the chrome installed, `plan` is shown in the footer next to the model instead.
         if (this.chrome) this.chrome.apply(ctx as never, true);
         else ctx.ui.setStatus(STATUS_KEY, "PLAN");
-        ctx.ui.setWidget(WIDGET_KEY, this.widgetLines(), { placement: "aboveEditor" });
+        ctx.ui.setWidget(WIDGET_KEY, this.widgetLines(ctx), { placement: "aboveEditor" });
     }
 
-    private widgetLines(): string[] {
+    private widgetLines(ctx: HostContext): string[] {
         const lines: string[] = [];
         const { error, config } = this.configResult;
         if (error) {
@@ -131,7 +145,8 @@ export class PlanModeController {
             lines.push("PLAN MODE: read-only. No writable directories configured (set allowedWriteDirectories in .pi/plan-mode.json).");
             lines.push("Exit: /pm exit");
         } else {
-            lines.push(`PLAN MODE: writes limited to ${(config.writeDirectoryLabels ?? config.writeDirectories).join(", ")}`);
+            const dirs = (config.writeDirectoryLabels ?? config.writeDirectories).join(", ");
+            lines.push(`PLAN MODE: writes limited to ${ctx.ui.theme?.fg("mdHeading", dirs) ?? dirs}`);
             lines.push("Exit: /pm exit");
         }
         return lines;

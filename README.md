@@ -17,7 +17,7 @@ pi install /absolute/path/to/plan-mode
 pi loads the TypeScript source in place (no build step, nothing is copied). During development use
 `/reload` while pi is idle. The directory can be moved later; run `pi install` again with the new path.
 
-For a one-off trial: `pi -e /absolute/path/to/plan-mode/src/index.ts`.
+For a one-off trial: `pi -e /absolute/path/to/plan-mode/index.ts`.
 
 ## Commands
 
@@ -29,12 +29,15 @@ For a one-off trial: `pi -e /absolute/path/to/plan-mode/src/index.ts`.
 Commands are explicit, not toggles. Any other argument prints usage and changes nothing. Transitions
 wait until the agent is idle. The subagent extension's own `/plan` command is untouched.
 
-While active the top and bottom borders of the prompt editor turn orange, the footer shows
+While active the footer shows
 `plan • <model> • <thinking>` (with `plan` in orange), a widget above the editor lists the writable
-directories (full path only for absolute config entries, otherwise relative to the working directory) and the exit instruction, and a notification is shown on entry and exit. pi's themes
+directories (shown in the heading colour; full path only for absolute config entries, otherwise relative to the working directory) and the exit instruction, and a notification is shown on entry and exit. pi's themes
 have no orange role, so the colour is fixed (truecolor `#ff8c00`, 256-colour `208`). pi can't
 decorate its built-in footer, so a mirror of it is installed while plan mode is on. On exit the
-built-in footer and the previous editor are restored and this extension's widget is removed. Exiting does not start any implementation.
+built-in footer is restored and this extension's widget is removed. Exiting does not start any implementation.
+
+`/planmode help` (or `/pm help`) prints the commands and a summary of the configuration below, plus the
+configuration currently in effect.
 
 ## Configuration
 
@@ -159,6 +162,7 @@ npm run smoke       # drives a real `pi --mode rpc` (no model calls); needs pi o
 ```
 
 ```
+index.ts             package entry point (re-exports src/index.ts)
 src/
   index.ts           wiring: commands, hooks
   controller.ts      mode state, UI, tool gate, prompt guidance

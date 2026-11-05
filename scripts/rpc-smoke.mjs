@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Smoke test against a real `pi` in RPC mode (no model calls). Verifies that the extension loads
- * under pi's own loader and that the real UI protocol receives the PLAN status, widget and
+ * under pi's own loader and that the real UI protocol receives the plan-mode widget and
  * notifications, including after new_session / switch_session / fork / reload.
  *
  *   node scripts/rpc-smoke.mjs
@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
 import assert from "node:assert/strict";
 
-const extension = resolve(dirname(fileURLToPath(import.meta.url)), "..", "src", "index.ts");
+const extension = resolve(dirname(fileURLToPath(import.meta.url)), "..", "index.ts");
 const root = realpathSync(mkdtempSync(join(tmpdir(), "plan-mode-rpc-")));
 const project = join(root, "project");
 mkdirSync(join(project, ".pi"), { recursive: true });
@@ -94,6 +94,9 @@ startPi();
 
 const status = (ui) => ui.filter((e) => e.method === "setStatus" && e.statusKey === "plan-mode").at(-1);
 const widget = (ui) => ui.filter((e) => e.method === "setWidget" && e.widgetKey === "plan-mode").at(-1);
+// In RPC mode there is no TUI footer, so plan mode shows up through the widget only.
+const stripAnsi = (text) => text.replace(/\x1b\[[0-9;]*m/g, "");
+const planWidget = (ui) => stripAnsi((widget(ui)?.widgetLines ?? []).join("\n"));
 const notes = (ui) => ui.filter((e) => e.method === "notify").map((e) => e.message);
 
 let failures = 0;
@@ -111,19 +114,18 @@ const sessionA = writeSession("A-enabled", [true]);
 const sessionB = writeSession("B-disabled-later", [true, false]);
 const sessionC = writeSession("C-no-state", []);
 
-await step("/pm enters plan mode: PLAN status, widget, notification", async () => {
+await step("/pm enters plan mode: widget, notification", async () => {
     const { ui } = await send({ type: "prompt", message: "/pm" });
-    assert.equal(status(ui)?.statusText, "PLAN");
-    const lines = widget(ui)?.widgetLines ?? [];
-    assert.ok(lines.join("\n").includes(join(project, "plan")), `widget: ${lines}`);
-    assert.match(lines.join("\n"), /\/pm exit/);
+    const text = planWidget(ui);
+    assert.match(text, /PLAN MODE: writes limited to plan\n/, `widget: ${text}`);
+    assert.match(text, /\/pm exit/);
     assert.equal(widget(ui)?.widgetPlacement, "aboveEditor");
     assert.match(notes(ui).join("\n"), /Plan mode enabled/);
 });
 
 await step("/planmode again is idempotent and reloads configuration", async () => {
     const { ui } = await send({ type: "prompt", message: "/planmode" });
-    assert.equal(status(ui)?.statusText, "PLAN");
+    assert.match(planWidget(ui), /PLAN MODE/);
     assert.match(notes(ui).join("\n"), /already enabled/);
 });
 
@@ -151,14 +153,13 @@ await step("new_session starts in normal mode and clears the UI", async () => {
 await step("switch_session restores each session's mode from its branch", async () => {
     let r = await send({ type: "switch_session", sessionPath: sessionA });
     assert.equal(r.response.success, true, JSON.stringify(r.response));
-    assert.equal(status(r.ui)?.statusText, "PLAN", "session A (enabled)");
-    assert.ok(widget(r.ui)?.widgetLines?.join("\n").includes(join(project, "plan")));
+    assert.match(planWidget(r.ui), /writes limited to plan\n/, "session A (enabled)");
     r = await send({ type: "switch_session", sessionPath: sessionB });
     assert.ok(status(r.ui) && status(r.ui).statusText === undefined, "session B (enabled then disabled)");
     r = await send({ type: "switch_session", sessionPath: sessionC });
     assert.ok(status(r.ui) && status(r.ui).statusText === undefined, "session C (no state)");
     r = await send({ type: "switch_session", sessionPath: sessionA });
-    assert.equal(status(r.ui)?.statusText, "PLAN", "back to session A");
+    assert.match(planWidget(r.ui), /PLAN MODE/, "back to session A");
 });
 
 await step("/pm exit clears status and widget; second exit is a no-op", async () => {
@@ -179,7 +180,7 @@ startPi(["--session", sessionD]);
 await new Promise((r) => setTimeout(r, 4000));
 await step("starting pi on a session with plan mode enabled restores it", async () => {
     const ui = events.filter((e) => e.type === "extension_ui_request");
-    assert.equal(status(ui)?.statusText, "PLAN", `ui events: ${JSON.stringify(ui)}`);
+    assert.match(planWidget(ui), /PLAN MODE/, `ui events: ${JSON.stringify(ui)}`);
 });
 pi.stdin.end();
 pi.kill();
