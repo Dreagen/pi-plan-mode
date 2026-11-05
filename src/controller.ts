@@ -2,6 +2,7 @@ import { type ConfigResult, emptyConfig, loadConfig } from "./config.ts";
 import { buildGuidance } from "./guidance.ts";
 import type { BeforeAgentStartLike, HostApi, HostCommandContext, HostContext, ToolCallLike } from "./host.ts";
 import { restoreEnabledFromBranch, STATE_ENTRY_TYPE } from "./state.ts";
+import { augmentSubagentInput } from "./subagent-guard.ts";
 import { describeAllowedDirectories, evaluateToolCall } from "./tool-policy.ts";
 
 export const STATUS_KEY = "plan-mode";
@@ -133,12 +134,18 @@ export class PlanModeController {
     /** `tool_call` gate. Returns a block result, or nothing to allow. */
     onToolCall(event: ToolCallLike, ctx: HostContext): { block: true; reason: string } | undefined {
         if (!this.enabled) return undefined;
-        const decision = evaluateToolCall(event.toolName, event.input ?? {}, {
+        const input = event.input ?? {};
+        const decision = evaluateToolCall(event.toolName, input, {
             cwd: ctx.cwd,
             configResult: this.configResult,
             home: this.home,
         });
         if (decision.action === "block") return { block: true, reason: decision.message };
+        if (decision.subagent) {
+            // Mutates the input in place; pi executes the mutated arguments (they are not revalidated).
+            const problem = augmentSubagentInput(decision.subagent, input);
+            if (problem) return { block: true, reason: `Blocked by plan mode: ${problem}.` };
+        }
         return undefined;
     }
 

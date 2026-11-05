@@ -158,6 +158,8 @@ Research against `@maplezzk/pi-interactive-subagents` 3.16.6 found:
 
 Do not claim that subagent read-only instructions are enforced. The mechanism used to ensure the parent includes those instructions on launches and follow-ups must be verified during implementation.
 
+Verified mechanism (pi 1.5.0): the `tool_call` handler receives the validated arguments object that pi then executes (`agent-loop.js` passes `args: validatedArgs` to both), so appending to `input.task` (`subagent`) or `input.message` (`subagent_resume`, set when absent) in place reaches the child. The installed subagent extension reads `params.task` / `params.message` directly. The block is wrapped in `<plan-mode-research-restrictions>` tags and appended idempotently. A launch whose `task` is missing or not a string is blocked rather than sent without the restrictions.
+
 ## Implementation decisions
 
 - TypeScript loaded directly by pi (jiti), no build step, no runtime dependencies. Tests use `tsx --test` (`node:test`).
