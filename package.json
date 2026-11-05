@@ -3,13 +3,18 @@
     "version": "0.1.0",
     "description": "Explicit planning mode for pi: guards agent operations outside configured planning directories.",
     "type": "module",
-    "keywords": ["pi-package"],
+    "keywords": [
+        "pi-package"
+    ],
     "pi": {
-        "extensions": ["./src/index.ts"]
+        "extensions": [
+            "./src/index.ts"
+        ]
     },
     "scripts": {
         "test": "tsx --test test/*.test.ts",
-        "typecheck": "tsc --noEmit"
+        "typecheck": "tsc --noEmit",
+        "smoke": "node scripts/rpc-smoke.mjs"
     },
     "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*"
