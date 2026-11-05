@@ -1,0 +1,150 @@
+import { type ConfigResult, emptyConfig, loadConfig } from "./config.ts";
+import { buildGuidance } from "./guidance.ts";
+import type { BeforeAgentStartLike, HostApi, HostCommandContext, HostContext, ToolCallLike } from "./host.ts";
+import { restoreEnabledFromBranch, STATE_ENTRY_TYPE } from "./state.ts";
+import { describeAllowedDirectories, evaluateToolCall } from "./tool-policy.ts";
+
+export const STATUS_KEY = "plan-mode";
+export const WIDGET_KEY = "plan-mode";
+
+export const USAGE = "Usage: /planmode (or /pm) to enter plan mode, /planmode exit (or /pm exit) to leave it.";
+
+export type ParsedCommand = "enter" | "exit" | "invalid";
+
+export function parseCommandArgs(args: string): ParsedCommand {
+    const trimmed = args.trim().toLowerCase();
+    if (trimmed === "") return "enter";
+    if (trimmed === "exit") return "exit";
+    return "invalid";
+}
+
+/** Holds the mode for one pi runtime and applies it to the UI, the tool gate and the system prompt. */
+export class PlanModeController {
+    private enabled = false;
+    private configResult: ConfigResult = { config: emptyConfig(), source: "none" };
+    private readonly pi: HostApi;
+    private readonly home?: string;
+
+    constructor(pi: HostApi, options: { home?: string } = {}) {
+        this.pi = pi;
+        this.home = options.home;
+    }
+
+    isEnabled(): boolean {
+        return this.enabled;
+    }
+
+    getConfigResult(): ConfigResult {
+        return this.configResult;
+    }
+
+    /** Handle `/planmode` and `/pm`. Transitions are applied at an idle boundary. */
+    async handleCommand(args: string, ctx: HostCommandContext): Promise<void> {
+        const command = parseCommandArgs(args);
+        if (command === "invalid") {
+            ctx.ui.notify(USAGE, "warning");
+            return;
+        }
+        await ctx.waitForIdle();
+        if (command === "enter") this.enter(ctx);
+        else this.exit(ctx);
+    }
+
+    private enter(ctx: HostContext): void {
+        const wasEnabled = this.enabled;
+        this.loadConfiguration(ctx.cwd);
+        this.enabled = true;
+        if (!wasEnabled) this.pi.appendEntry(STATE_ENTRY_TYPE, { enabled: true });
+        this.render(ctx);
+        const prefix = wasEnabled ? "Plan mode already enabled (configuration reloaded)." : "Plan mode enabled.";
+        this.notifyState(ctx, prefix);
+    }
+
+    private exit(ctx: HostContext): void {
+        if (!this.enabled) {
+            this.render(ctx);
+            ctx.ui.notify("Plan mode is already disabled.", "info");
+            return;
+        }
+        this.enabled = false;
+        this.pi.appendEntry(STATE_ENTRY_TYPE, { enabled: false });
+        this.render(ctx);
+        ctx.ui.notify("Plan mode disabled. Normal tool access restored.", "info");
+    }
+
+    /** Rebuild state from the active session branch (startup, reload, resume, fork, tree navigation). */
+    restore(ctx: HostContext): void {
+        this.enabled = restoreEnabledFromBranch(ctx.sessionManager.getBranch());
+        if (this.enabled) this.loadConfiguration(ctx.cwd);
+        this.render(ctx);
+        if (this.enabled && this.configResult.error) {
+            ctx.ui.notify(this.errorText(), "error");
+        }
+    }
+
+    private loadConfiguration(cwd: string): void {
+        this.configResult = loadConfig({ cwd, home: this.home });
+    }
+
+    private errorText(): string {
+        const error = this.configResult.error;
+        return error
+            ? `Plan-mode configuration error in ${error.path}: ${error.message}. Plan mode stays on with no writable directories; fix the file and run /pm to reload.`
+            : "";
+    }
+
+    private notifyState(ctx: HostContext, prefix: string): void {
+        if (this.configResult.error) {
+            ctx.ui.notify(`${prefix} ${this.errorText()}`, "error");
+            return;
+        }
+        const dirs = describeAllowedDirectories(this.configResult);
+        const level = this.configResult.config.writeDirectories.length === 0 ? "warning" : "info";
+        ctx.ui.notify(`${prefix} Writable directories: ${dirs}. Exit with /pm exit.`, level);
+    }
+
+    /** Show or clear this extension's own status and widget only. */
+    render(ctx: HostContext): void {
+        if (!this.enabled) {
+            ctx.ui.setStatus(STATUS_KEY, undefined);
+            ctx.ui.setWidget(WIDGET_KEY, undefined);
+            return;
+        }
+        ctx.ui.setStatus(STATUS_KEY, "PLAN");
+        ctx.ui.setWidget(WIDGET_KEY, this.widgetLines(), { placement: "aboveEditor" });
+    }
+
+    private widgetLines(): string[] {
+        const lines: string[] = [];
+        const { error, config } = this.configResult;
+        if (error) {
+            lines.push(`PLAN MODE: read-only. Configuration error in ${error.path}: ${error.message}`);
+            lines.push("No writable directories. Fix the file, then run /pm to reload. Exit: /pm exit");
+        } else if (config.writeDirectories.length === 0) {
+            lines.push("PLAN MODE: read-only. No writable directories configured (set allowedWriteDirectories in .pi/plan-mode.json).");
+            lines.push("Exit: /pm exit");
+        } else {
+            lines.push(`PLAN MODE: writes limited to ${config.writeDirectories.join(", ")}`);
+            lines.push("Exit: /pm exit");
+        }
+        return lines;
+    }
+
+    /** `tool_call` gate. Returns a block result, or nothing to allow. */
+    onToolCall(event: ToolCallLike, ctx: HostContext): { block: true; reason: string } | undefined {
+        if (!this.enabled) return undefined;
+        const decision = evaluateToolCall(event.toolName, event.input ?? {}, {
+            cwd: ctx.cwd,
+            configResult: this.configResult,
+            home: this.home,
+        });
+        if (decision.action === "block") return { block: true, reason: decision.message };
+        return undefined;
+    }
+
+    /** Per-run system prompt addition; nothing persists once the mode is off. */
+    onBeforeAgentStart(event: BeforeAgentStartLike): { systemPrompt: string } | undefined {
+        if (!this.enabled) return undefined;
+        return { systemPrompt: `${event.systemPrompt}\n\n${buildGuidance(this.configResult)}` };
+    }
+}
