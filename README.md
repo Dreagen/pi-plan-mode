@@ -29,9 +29,12 @@ For a one-off trial: `pi -e /absolute/path/to/plan-mode/src/index.ts`.
 Commands are explicit, not toggles. Any other argument prints usage and changes nothing. Transitions
 wait until the agent is idle. The subagent extension's own `/plan` command is untouched.
 
-While active you get a `PLAN` footer status, a widget above the editor listing the writable
-directories and the exit instruction, and a notification on entry and exit. On exit, only this
-extension's status and widget are removed. Exiting does not start any implementation.
+While active the top and bottom borders of the prompt editor turn orange, the footer shows
+`plan • <model> • <thinking>` (with `plan` in orange), a widget above the editor lists the writable
+directories (full path only for absolute config entries, otherwise relative to the working directory) and the exit instruction, and a notification is shown on entry and exit. pi's themes
+have no orange role, so the colour is fixed (truecolor `#ff8c00`, 256-colour `208`). pi can't
+decorate its built-in footer, so a mirror of it is installed while plan mode is on. On exit the
+built-in footer and the previous editor are restored and this extension's widget is removed. Exiting does not start any implementation.
 
 ## Configuration
 

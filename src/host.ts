@@ -51,4 +51,5 @@ export interface HostApi {
         options: { description?: string; handler: (args: string, ctx: HostCommandContext) => Promise<void> },
     ): void;
     appendEntry(customType: string, data?: unknown): void;
+    getThinkingLevel?(): string;
 }

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
 import { resolveToolPath } from "./paths.ts";
 
 export const GLOBAL_CONFIG_RELATIVE = join(".pi", "agent", "plan-mode.json");
@@ -11,6 +11,11 @@ const KNOWN_KEYS = ["allowedWriteDirectories", "allowedTools", "allowedShellComm
 export interface PlanModeConfig {
     /** Absolute, lexically normalised directories (descendants included). Symlinks resolved at check time. */
     writeDirectories: string[];
+    /**
+     * How each write directory is shown to the user (same order): the full path when the config entry was
+     * absolute (or `~`/`file://`), otherwise the path relative to the working directory.
+     */
+    writeDirectoryLabels?: string[];
     /** Exact extra tool names. */
     allowedTools: string[];
     /** Extra shell commands as exact argv prefixes. */
@@ -83,6 +88,12 @@ export function parseConfig(text: string, cwd: string, home: string): PlanModeCo
         const list = stringList(record.allowedWriteDirectories, "allowedWriteDirectories");
         if (typeof list === "string") return list;
         config.writeDirectories = list.map((entry) => resolveToolPath(entry, cwd, home));
+        config.writeDirectoryLabels = list.map((entry, index) => {
+            const resolved = config.writeDirectories[index];
+            const written = entry.replace(/^@/, "");
+            if (isAbsolute(written) || written.startsWith("~") || written.startsWith("file://")) return resolved;
+            return relative(cwd, resolved) || ".";
+        });
     }
     if (record.allowedTools !== undefined) {
         const list = stringList(record.allowedTools, "allowedTools");

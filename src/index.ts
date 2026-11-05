@@ -1,8 +1,9 @@
+import { createChrome } from "./chrome.ts";
 import { PlanModeController } from "./controller.ts";
 import type { HostApi } from "./host.ts";
 
 export default function planMode(pi: HostApi): void {
-    const controller = new PlanModeController(pi);
+    const controller = new PlanModeController(pi, { chrome: createChrome(pi) });
 
     // Commands are explicit and idempotent. `/plan` belongs to the subagent extension and is left alone.
     for (const name of ["planmode", "pm"]) {

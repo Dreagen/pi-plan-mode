@@ -40,13 +40,21 @@ describe("entering and exiting", () => {
         await run("");
         assert.equal(host.statuses.get(STATUS_KEY), "PLAN");
         const widget = host.widgets.get(WIDGET_KEY)?.join("\n") ?? "";
-        assert.ok(widget.includes(join(cwd, "plan")));
-        assert.ok(widget.includes(join(cwd, "docs", "plan")));
+        assert.match(widget, /writes limited to plan, docs\/plan\n/);
+        assert.ok(!widget.includes(cwd));
         assert.match(widget, /\/pm exit/);
         assert.equal(host.notifications.length, 1);
         assert.match(host.notifications[0].message, /Plan mode enabled/);
         assert.equal(host.notifications[0].level, "info");
         assert.deepEqual(host.entries, [{ customType: STATE_ENTRY_TYPE, data: { enabled: true } }]);
+    });
+
+    it("shows absolute config entries in full and relative ones relative to the cwd", async () => {
+        const { host, run, cwd } = setup({ allowedWriteDirectories: ["plan/", "../shared/", "/abs/specs/"] });
+        await run("");
+        const widget = host.widgets.get(WIDGET_KEY)?.join("\n") ?? "";
+        assert.ok(widget.includes(`writes limited to plan, ${join("..", "shared")}, ${join("/abs", "specs")}`), widget);
+        assert.ok(!widget.includes(cwd));
     });
 
     it("removes status and widget on exit and notifies", async () => {
@@ -110,7 +118,7 @@ describe("entering and exiting", () => {
         writeFile(join(cwd, ".pi", "plan-mode.json"), JSON.stringify({ allowedWriteDirectories: ["docs/"] }));
         await run("");
         assert.deepEqual(controller.getConfigResult().config.writeDirectories, [join(cwd, "docs")]);
-        assert.ok((host.widgets.get(WIDGET_KEY) ?? []).join("\n").includes(join(cwd, "docs")));
+        assert.ok((host.widgets.get(WIDGET_KEY) ?? []).join("\n").includes("writes limited to docs"));
     });
 
     it("only touches this extension's own status and widget keys", async () => {

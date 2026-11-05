@@ -1,3 +1,4 @@
+import type { Chrome } from "./chrome.ts";
 import { type ConfigResult, emptyConfig, loadConfig } from "./config.ts";
 import { buildGuidance } from "./guidance.ts";
 import type { BeforeAgentStartLike, HostApi, HostCommandContext, HostContext, ToolCallLike } from "./host.ts";
@@ -25,10 +26,12 @@ export class PlanModeController {
     private configResult: ConfigResult = { config: emptyConfig(), source: "none" };
     private readonly pi: HostApi;
     private readonly home?: string;
+    private readonly chrome?: Chrome;
 
-    constructor(pi: HostApi, options: { home?: string } = {}) {
+    constructor(pi: HostApi, options: { home?: string; chrome?: Chrome } = {}) {
         this.pi = pi;
         this.home = options.home;
+        this.chrome = options.chrome;
     }
 
     isEnabled(): boolean {
@@ -109,9 +112,12 @@ export class PlanModeController {
         if (!this.enabled) {
             ctx.ui.setStatus(STATUS_KEY, undefined);
             ctx.ui.setWidget(WIDGET_KEY, undefined);
+            this.chrome?.apply(ctx as never, false);
             return;
         }
-        ctx.ui.setStatus(STATUS_KEY, "PLAN");
+        // With the chrome installed, `plan` is shown in the footer next to the model instead.
+        if (this.chrome) this.chrome.apply(ctx as never, true);
+        else ctx.ui.setStatus(STATUS_KEY, "PLAN");
         ctx.ui.setWidget(WIDGET_KEY, this.widgetLines(), { placement: "aboveEditor" });
     }
 
@@ -125,7 +131,7 @@ export class PlanModeController {
             lines.push("PLAN MODE: read-only. No writable directories configured (set allowedWriteDirectories in .pi/plan-mode.json).");
             lines.push("Exit: /pm exit");
         } else {
-            lines.push(`PLAN MODE: writes limited to ${config.writeDirectories.join(", ")}`);
+            lines.push(`PLAN MODE: writes limited to ${(config.writeDirectoryLabels ?? config.writeDirectories).join(", ")}`);
             lines.push("Exit: /pm exit");
         }
         return lines;
