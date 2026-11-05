@@ -89,7 +89,8 @@ Rules:
 ```
 
 - `allowedTools`: exact tool names added to the allowlist. No wildcards.
-- `allowedShellCommands`: exact argv-prefix matches added to the built-in vetted set. They cannot override hard rejections (redirection, chaining, substitution, and the argument rules for built-in commands).
+- `allowedShellCommands`: additions to the built-in vetted set, written as whitespace-separated commands (e.g. `"make -n"`). For an executable that is not built in, an entry matches by argv prefix (`make -n all` matches `make -n`). For a built-in executable (e.g. `git`), an entry must match the whole command exactly (`git stash list` permits only that), so it can never loosen the built-in argument rules by prefix. Entries cannot override the hard rejections (chaining, pipes, redirection, substitution, globbing).
+- `allowedTools` cannot bypass the dedicated policies for `write`, `edit`, `bash`, `subagent` and `subagent_resume`.
 - Local replaces global, as for directories. An absent key means no extras.
 - If the effective configuration is invalid (on entry, restore or reload), plan mode still turns on with zero writable directories and no extras. The error (file path and problem) is shown in a notification and in the widget. A bad local configuration never falls back to global.
 
@@ -176,7 +177,8 @@ Do not claim that subagent read-only instructions are enforced. The mechanism us
 ### Shell policy (starting set)
 
 - Allowed with argument validation: `ls`, `pwd`, `cat`, `head`, `tail`, `wc`, `stat`, `file`, `tree`; `rg`/`grep` without program-executing options (e.g. `--pre`); `find` without `-exec`, `-execdir`, `-ok`, `-okdir`, `-delete`, `-fprint*`; read-only `git` (`status`, `log`, `diff`, `show`, `branch --list`, `rev-parse`, `ls-files`) rejecting `--output`, `-c`, `--ext-diff`.
-- Any command containing shell metacharacters (``; & | < > $ ` ( ) { } * ? [ ] ~``, newline, backslash) is rejected. Arguments are whitespace-tokenised with only simple quoted literals. False rejections (e.g. `rg "foo|bar"`) are accepted.
+- Any command containing shell metacharacters (``; & | < > $ ` ( ) { } * ? [ ]``, backslash, newline, control characters) is rejected, as is any argument starting with `~` or `#`. A `~` inside an argument (e.g. `HEAD~1`) is allowed.
+- The executable and every option must be on an allowlist, and options are matched exactly (never by prefix or abbreviation), because tools accept abbreviated long options such as `git log --out=file`. Git top-level options (`-c`, `-C`, `--git-dir`, ...) are rejected; only `--no-pager` is accepted before the subcommand. Arguments are whitespace-tokenised with only simple quoted literals. False rejections (e.g. `rg "foo|bar"`) are accepted.
 - Bypass tests must cover `find -exec`, `git -c core.pager=...`, `rg --pre`, `cat $(...)`, `ls; rm`, `$IFS` tricks and embedded newlines.
 
 ### Pi 1.5.0 API facts relied on
