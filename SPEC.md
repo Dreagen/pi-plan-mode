@@ -1,6 +1,6 @@
 # Plan Mode Extension — v1 Specification
 
-Status: Agreed design; implementation in progress (see Implementation decisions and Milestones).
+Status: v1 implemented (see README.md and docs/verification.md). Interactive TUI checks remain in the manual checklist.
 
 ## Purpose
 
